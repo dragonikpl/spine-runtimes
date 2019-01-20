@@ -10,7 +10,7 @@ import UIKit
 import Metal
 
 extension MTLRenderPassDescriptor {
-    convenience init(texture: MTLTexture, sampleTex: MTLTexture, clearColor: UIColor = .blue) {
+    convenience init(texture: MTLTexture, sampleTex: MTLTexture, clearColor: UIColor = .clear) {
         self.init()
 
         colorAttachments[0].texture = sampleTex

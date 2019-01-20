@@ -10,10 +10,11 @@
 #import <Metal/Metal.h>
 
 void _spAtlasPage_createTexture (spAtlasPage* self, const char* path) {
+    NSString *stringPath = @(path);
     NSURL *url = [NSURL fileURLWithPath:@(path)];
     MTKTextureLoader *loader = [[MTKTextureLoader alloc] initWithDevice:MTLCreateSystemDefaultDevice()];
     id<MTLTexture> texture = [loader newTextureWithContentsOfURL:url options:nil error:nil];
-    self->rendererObject = path;
+    self->rendererObject = [stringPath UTF8String];
     self->width = (int)texture.width;
     self->height = (int)texture.height;
 }

@@ -9,13 +9,13 @@ import SpineC
 import Metal
 import MetalKit
 
+struct SpineVertex {
+    let position: float4
+    let color: float4
+    let texCoord: float2
+}
+
 final public class SkeletonRenderer {
-    struct SpineVertex {
-        let position: float4
-        let color: float4
-        let texCoord: float2
-    }
-    
     public lazy var metalLayer: CAMetalLayer = {
         let metalLayer = CAMetalLayer()
         metalLayer.device = device
