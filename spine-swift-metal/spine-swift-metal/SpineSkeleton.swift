@@ -8,11 +8,12 @@
 import SpineC
 import simd
 
-class SpineSkeleton {
+public class SpineSkeleton {
     let renderSize: CGSize
     var atlas: UnsafeMutablePointer<spAtlas>
     var skeleton: UnsafeMutablePointer<spSkeleton>?
     var animationState: UnsafeMutablePointer<spAnimationState>?
+    let vertices: UnsafeMutablePointer<Float> = UnsafeMutablePointer<Float>.allocate(capacity: 1000)
     
     var quadTriangles: UnsafeMutablePointer<UInt16> = {
         let triangles = UnsafeMutablePointer<UInt16>.allocate(capacity: 6)
@@ -62,16 +63,16 @@ class SpineSkeleton {
         return String(cString: cstring)
     }
     
-    func setSkin(name: String?) {
+    public func setSkin(name: String?) {
         spSkeleton_setSkinByName(skeleton, UnsafePointer<Int8>(strdup(name)))
     }
     
-    func setAnimation(name: String, track: Int, loop: Bool) {
+    public func setAnimation(name: String, track: Int, loop: Bool) {
         let animation = spSkeletonData_findAnimation(skeleton?.pointee.data, UnsafePointer<Int8>(strdup(name)))
         spAnimationState_setAnimation(animationState, Int32(track), animation, Int32(loop ? 1 : 0))
     }
     
-    func setPosition(position: CGPoint) {
+    public func setPosition(position: CGPoint) {
         skeleton?.pointee.x = Float(position.x)
         skeleton?.pointee.y = Float(position.y)
     }
@@ -83,19 +84,23 @@ class SpineSkeleton {
         spSkeleton_updateWorldTransform(skeleton)
     }
     
-    func draw(vertexData: inout [SpineVertex], indexData: inout [UInt16]) {
+    func draw(lastVertexCount: Int, lastIndexCount: Int) -> ([SpineVertex], [UInt16]) {
+        var vertexData = [SpineVertex]()
+        vertexData.reserveCapacity(lastVertexCount)
+        var indexData = [UInt16]()
+        indexData.reserveCapacity(lastIndexCount)
+        
         var uvs: [Float] = []
-        let vertices: UnsafeMutablePointer<Float> = UnsafeMutablePointer<Float>.allocate(capacity: 1000)
         var verticesCount: Int32 = 0
-        var triangles: UnsafeMutablePointer<UInt16>?
+        var triangles: UnsafeMutablePointer<UInt16>
         var trianglesCount: Int32 = 0
-        var r: Float = 1
-        var g: Float = 1
-        var b: Float = 1
-        var a: Float = 1
-        var srcBlend: MTLBlendFactor
-        var dstBlend: MTLBlendFactor
-        var trianglesCountOffset: UInt16 = 0
+//        var r: Float = 1
+//        var g: Float = 1
+//        var b: Float = 1
+//        var a: Float = 1
+//        var srcBlend: MTLBlendFactor
+//        var dstBlend: MTLBlendFactor
+        var trianglesCountOffset = 0
         
         let slotsCount = Int(skeleton?.pointee.slotsCount ?? 0)
         for i in 0...(slotsCount-1) {
@@ -115,10 +120,10 @@ class SpineSkeleton {
                 verticesCount = 8
                 triangles = quadTriangles
                 trianglesCount = 6
-                r = regionAttachment.pointee.color.r
-                g = regionAttachment.pointee.color.g
-                b = regionAttachment.pointee.color.b
-                a = regionAttachment.pointee.color.a
+//                r = regionAttachment.pointee.color.r
+//                g = regionAttachment.pointee.color.g
+//                b = regionAttachment.pointee.color.b
+//                a = regionAttachment.pointee.color.a
                 break
             case SP_ATTACHMENT_MESH:
                 let meshAttachment: UnsafeMutablePointer<spMeshAttachment> = UnsafeMutablePointer<spMeshAttachment>(OpaquePointer(attachment))
@@ -127,10 +132,10 @@ class SpineSkeleton {
                 uvs = Array(UnsafeBufferPointer(start: meshAttachment.pointee.uvs, count: Int(verticesCount)))
                 triangles = meshAttachment.pointee.triangles
                 trianglesCount = meshAttachment.pointee.trianglesCount
-                r = meshAttachment.pointee.color.r
-                g = meshAttachment.pointee.color.g
-                b = meshAttachment.pointee.color.b
-                a = meshAttachment.pointee.color.a
+//                r = meshAttachment.pointee.color.r
+//                g = meshAttachment.pointee.color.g
+//                b = meshAttachment.pointee.color.b
+//                a = meshAttachment.pointee.color.a
                 
                 break
             case SP_ATTACHMENT_CLIPPING:
@@ -139,41 +144,38 @@ class SpineSkeleton {
                 continue
             }
             
-            switch slot.pointee.data.pointee.blendMode {
-            case SP_BLEND_MODE_ADDITIVE:
-                srcBlend = .one
-                dstBlend = .one
-            case SP_BLEND_MODE_MULTIPLY:
-                srcBlend = .destinationColor
-                dstBlend = .oneMinusSourceAlpha
-            case SP_BLEND_MODE_SCREEN:
-                srcBlend = .one
-                dstBlend = .oneMinusSourceColor
-            default:
-                srcBlend = .one
-                dstBlend = .oneMinusSourceAlpha
-            }
+//            switch slot.pointee.data.pointee.blendMode {
+//            case SP_BLEND_MODE_ADDITIVE:
+//                srcBlend = .one
+//                dstBlend = .one
+//            case SP_BLEND_MODE_MULTIPLY:
+//                srcBlend = .destinationColor
+//                dstBlend = .oneMinusSourceAlpha
+//            case SP_BLEND_MODE_SCREEN:
+//                srcBlend = .one
+//                dstBlend = .oneMinusSourceColor
+//            default:
+//                srcBlend = .one
+//                dstBlend = .oneMinusSourceAlpha
+//            }
             
-            var newVertexData: [SpineVertex] = []
+            var counter = 0
+            var color = float4(1, 1, 1, 1)
             if trianglesCount > 0 {
                 for i in 0...Int(verticesCount) where i*2 < Int(verticesCount) {
-                    let position = float4(vertices[i * 2] / Float(renderSize.width), vertices[i * 2 + 1] / Float(renderSize.height), 0, 1)
-                    let color = float4(r, g, b, a)
-                    let textCoord = float2(uvs[i * 2], 1 - uvs[i * 2 + 1])
-                    let vertex = SpineVertex(position: position, color: color, texCoord: textCoord)
-                    newVertexData.append(vertex)
+                    vertexData.append(SpineVertex(position: float4(vertices[i * 2] / Float(renderSize.width), vertices[i * 2 + 1] / Float(renderSize.height), 0, 1), color: color, texCoord: float2(uvs[i * 2], 1 - uvs[i * 2 + 1])))
+                    counter += 1
                 }
-                vertexData.append(contentsOf: newVertexData)
                 
                 for j in 0...Int(trianglesCount) where j*3 < Int(trianglesCount) {
-                    let newIndexData = [triangles?[j*3], triangles?[j*3+1], triangles?[j*3+2]]
-                        .map { $0?.addingReportingOverflow(trianglesCountOffset).partialValue }
-                        .compactMap { $0 }
-                    indexData.append(contentsOf: newIndexData)
+                    indexData.append(triangles[j*3].advanced(by: trianglesCountOffset))
+                    indexData.append(triangles[j*3+1].advanced(by: trianglesCountOffset))
+                    indexData.append(triangles[j*3+2].advanced(by: trianglesCountOffset))
                 }
             }
-            
-            trianglesCountOffset += UInt16(newVertexData.count)
+            trianglesCountOffset += counter
         }
+        
+        return (vertexData, indexData)
     }
 }

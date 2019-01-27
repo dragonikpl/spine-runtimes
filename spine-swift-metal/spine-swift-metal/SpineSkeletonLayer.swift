@@ -10,7 +10,7 @@ import Metal
 import MetalKit
 
 public final class SpineSkeletonLayer: CAMetalLayer {
-    var skeleton: SpineSkeleton
+    public var skeleton: SpineSkeleton
     
     private var texture: MTLTexture?
     private lazy var sampleTex: MTLTexture? = {
@@ -35,10 +35,10 @@ public final class SpineSkeletonLayer: CAMetalLayer {
     }()
     private lazy var commandQueue: MTLCommandQueue? = { device?.makeCommandQueue() }()
     
-    private var vertexData: [SpineVertex] = []
     private var vertexBuffer: MTLBuffer!
-    private var indexData: [UInt16] = []
     private var indexBuffer: MTLBuffer!
+    private var dataSize: Int = 0
+    private var indexSize: Int = 0
     private lazy var timer: CADisplayLink = { CADisplayLink(target: self, selector: #selector(drawMetal)) }()
     
     required init?(coder aDecoder: NSCoder) {
@@ -63,44 +63,33 @@ public final class SpineSkeletonLayer: CAMetalLayer {
             texture = try? MTKTextureLoader(device: device).newTexture(URL: URL(fileURLWithPath: texturePath), options: [.origin: MTKTextureLoader.Origin.bottomLeft])
         }
         
+        timer.preferredFramesPerSecond = 60
         timer.add(to: .main, forMode: .default)
-    }
-    
-    /// Sets skin for spine skeleton. Not providing name set to "default" skin.
-    public func setSkin(name: String?) {
-        skeleton.setSkin(name: "default")
-    }
-    
-    /// Sets spine skeleton animation to it's name on certain track.
-    public func setAnimation(name: String, track: Int, loop: Bool) {
-        skeleton.setAnimation(name: name, track: track, loop: loop)
-    }
-    
-    /// Sets spine skeleton position relative to it's (0,0) root.
-    /// Origin is Left-Bottom
-    /// Initial position is center of provided frame
-    public func setPosition(position: CGPoint) {
-        skeleton.setPosition(position: position)
     }
     
     // MARK: - Calculations
     
-    func calculateSkeleton() {
-        vertexData = []
-        indexData = []
-        
+    func calculateSkeleton() -> Int {
         let framerate: Float = 1.0/60.0
         skeleton.update(delta: framerate)
-        skeleton.draw(vertexData: &vertexData, indexData: &indexData)
+        let (vertexData, indexData) = skeleton.draw(lastVertexCount: dataSize, lastIndexCount: indexSize)
+        dataSize = vertexData.count * MemoryLayout.stride(ofValue: vertexData[0])
+        if vertexBuffer == nil || vertexBuffer.length != dataSize {
+            vertexBuffer = device?.makeBuffer(length: dataSize, options: [.cpuCacheModeWriteCombined])
+        }
+        memcpy(vertexBuffer.contents(), vertexData, dataSize)
         
-        let dataSize = vertexData.count * MemoryLayout.stride(ofValue: vertexData[0])
-        vertexBuffer = device?.makeBuffer(bytes: vertexData, length: dataSize, options: [])
-        let indexSize = indexData.count * MemoryLayout.stride(ofValue: indexData[0])
-        indexBuffer = device?.makeBuffer(bytes: indexData, length: indexSize, options: [])
+        indexSize = indexData.count * MemoryLayout.stride(ofValue: indexData[0])
+        if indexBuffer == nil || indexBuffer.length != indexSize {
+            indexBuffer = device?.makeBuffer(length: indexSize, options: [.cpuCacheModeWriteCombined])
+        }
+        memcpy(indexBuffer.contents(), indexData, indexSize)
+
+        return indexBuffer.length / MemoryLayout.size(ofValue: indexData[0])
     }
     
     @objc func drawMetal() {
-        calculateSkeleton()
+        let indexCount = calculateSkeleton()
         
         guard let drawable = nextDrawable(),
             let pipelineState = pipelineState,
@@ -112,7 +101,7 @@ public final class SpineSkeletonLayer: CAMetalLayer {
         renderEncoder?.setRenderPipelineState(pipelineState)
         renderEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
         renderEncoder?.setFragmentTexture(texture, index: 0)
-        renderEncoder?.drawIndexedPrimitives(type: .triangle, indexCount: indexBuffer.length / MemoryLayout.size(ofValue: indexData[0]), indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
+        renderEncoder?.drawIndexedPrimitives(type: .triangle, indexCount: indexCount, indexType: .uint16, indexBuffer: indexBuffer, indexBufferOffset: 0)
         renderEncoder?.endEncoding()
         
         commandBuffer.present(drawable)
