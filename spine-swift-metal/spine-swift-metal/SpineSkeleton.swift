@@ -72,6 +72,11 @@ public class SpineSkeleton {
         spAnimationState_setAnimation(animationState, Int32(track), animation, Int32(loop ? 1 : 0))
     }
     
+    public func setTimeScale(_ scale: Float, track: Int) {
+        let trackEntry = spAnimationState_getCurrent(animationState, Int32(track))
+        trackEntry?.pointee.timeScale = scale
+    }
+    
     public func setPosition(position: CGPoint) {
         skeleton?.pointee.x = Float(position.x)
         skeleton?.pointee.y = Float(position.y)

@@ -25,7 +25,7 @@ public final class SpineSkeletonLayer: CAMetalLayer {
         textureDescriptor.storageMode = .private
         textureDescriptor.width = Int(frame.width * UIScreen.main.scale)
         textureDescriptor.height = Int(frame.height * UIScreen.main.scale)
-        
+    
         return textureDescriptor
     }()
     private let pipelineStateDescriptor = MTLRenderPipelineDescriptor(vertex: .basicVertex, fragment: .basicFragment)
@@ -96,7 +96,7 @@ public final class SpineSkeletonLayer: CAMetalLayer {
             let sampleTex = sampleTex,
             let commandBuffer = commandQueue?.makeCommandBuffer() else { return }
         
-        let renderPassDescriptor = MTLRenderPassDescriptor(texture: drawable.texture, sampleTex: sampleTex)
+        let renderPassDescriptor = MTLRenderPassDescriptor(texture: drawable.texture, sampleTex: sampleTex, clearColor: .clear)
         let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor)
         renderEncoder?.setRenderPipelineState(pipelineState)
         renderEncoder?.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
