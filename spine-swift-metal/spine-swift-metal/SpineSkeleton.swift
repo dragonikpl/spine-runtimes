@@ -38,6 +38,23 @@ public class SpineSkeleton {
         
         let animationStateData = spAnimationStateData_create(skeleton?.pointee.data)
         animationState = spAnimationState_create(animationStateData)
+        animationState?.pointee.data.pointee.defaultMix = 0.3
+        
+        let listener: spAnimationStateListener = { state, type, trackEntry, event in
+            switch type {
+            case SP_ANIMATION_COMPLETE:
+                if trackEntry?.pointee.loop == 0 {
+                    NotificationCenter.default.post(name: Notification.Name(rawValue: "clearTrack"), object: Int(trackEntry!.pointee.trackIndex))
+                }
+            default:
+                break
+            }
+        }
+        animationState?.pointee.listener = listener
+        
+        NotificationCenter.default.addObserver(forName: Notification.Name(rawValue: "clearTrack"), object: nil, queue: OperationQueue.main) { [weak self] notification in
+            self?.clearTrack(notification.object as! Int)
+        }
     }
     
     private func skeletonData(filePathPointer: UnsafePointer<Int8>?, scale: Float) -> UnsafeMutablePointer<spSkeletonData>? {
@@ -52,6 +69,7 @@ public class SpineSkeleton {
         spSkeletonData_dispose(skeleton?.pointee.data)
         spAtlas_dispose(atlas)
         spSkeleton_dispose(skeleton)
+        spAnimationState_clearListenerNotifications(animationState)
     }
 
     func texturePath(at index: Int) -> String? {
@@ -64,12 +82,18 @@ public class SpineSkeleton {
     }
     
     public func setSkin(name: String?) {
+        
         spSkeleton_setSkinByName(skeleton, UnsafePointer<Int8>(strdup(name)))
     }
     
     public func setAnimation(name: String, track: Int, loop: Bool) {
         let animation = spSkeletonData_findAnimation(skeleton?.pointee.data, UnsafePointer<Int8>(strdup(name)))
         spAnimationState_setAnimation(animationState, Int32(track), animation, Int32(loop ? 1 : 0))
+    }
+    
+    public func clearTrack(_ track: Int) {
+        spAnimationState_setEmptyAnimation(animationState, Int32(track), 0.2)
+        
     }
     
     public func setTimeScale(_ scale: Float, track: Int) {
